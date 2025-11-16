@@ -35,5 +35,16 @@ pip install -r requirements.txt
 ## Results
 [Will fill this in at the end]
 
+
+## Technical Notes
+
+### API Endpoint
+This project uses `api.binance.us` instead of `api.binance.com` due to US regulatory restrictions. The endpoints are functionally identical but `binance.us` has slightly fewer trading pairs available.
+
+**Why this matters for reproducibility:**
+- Non-US users should use `api.binance.com`
+- US users must use `api.binance.us`
+- The code is designed to work with both
+
 ## Author
 Anthony Eugene Lewallen - [LinkedIn] - [Email]
