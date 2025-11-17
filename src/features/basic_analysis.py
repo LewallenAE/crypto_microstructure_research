@@ -10,11 +10,16 @@ CONCEPTS:
 - Finding correlations between assets
 - Identifying the most/least volatile cryptocurrencies
 """
-
+from pathlib import Path
+import sys
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 import os
 import pandas as pd
-import numpy as np
-from pathlib import Path
+# import numpy as np
+
+from src.data_collection.historical import symbols as all_symbols
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -35,9 +40,8 @@ def load_price_data(symbol):
     # The file is in src/data_collection/raw/{symbol.lower()}_1h_1week.csv
     # Hint: Use Path(__file__).parent to get current directory
     
-    current_dir = Path(__file__).parent  # Path(__file__).parent
-    raw_dir = current_dir/ "raw"
-    raw_dir.mkdir(parents=True, exist_ok=True)
+    current_dir = Path(__file__).resolve().parent.parent  # Path(__file__).parent
+    raw_dir = current_dir/ "data_collection" / "raw"
     filename = f"{symbol.lower()}_1h_1week.csv"
     filepath = raw_dir / filename   # current_dir / '../data_collection/raw' / f'{symbol.lower()}_1h_1week.csv'
     
@@ -84,11 +88,14 @@ def calculate_returns(df):
     # pct_change() calculates (current - previous) / previous
     # Hint: df['returns'] = df['close'].pct_change()
     
-    pct_change() = 
+    df['returns'] = df['close'].pct_change()
+    
     # TODO 2.2: The first row will be NaN (no previous value), that's okay
     # But let's see how many returns we have
     # print(f"Calculated {df['returns'].count()} returns")
     
+    print(f"Calculated {df['returns'].count()} returns")
+
     return df
 
 
@@ -111,23 +118,23 @@ def calculate_statistics(df):
     
     # TODO 3.1: Calculate mean return
     # Hint: df['returns'].mean()
-    stats['mean_return'] = None
+    stats['mean_return'] = df['returns'].mean()
     
     # TODO 3.2: Calculate volatility (standard deviation of returns)
     # This measures how much returns fluctuate = risk
     # Hint: df['returns'].std()
-    stats['volatility'] = None
+    stats['volatility'] = df['returns'].std()
     
     # TODO 3.3: Calculate min and max returns
-    stats['min_return'] = None  # df['returns'].min()
-    stats['max_return'] = None  # df['returns'].max()
+    stats['min_return'] = df['returns'].min()  # df['returns'].min()
+    stats['max_return'] = df['returns'].max()  # df['returns'].max()
     
     # TODO 3.4: Calculate a simple Sharpe-like ratio
     # Sharpe ratio = mean_return / volatility
     # Higher means better risk-adjusted returns
     # Handle divide-by-zero case
     if stats['volatility'] > 0:
-        stats['sharpe_ratio'] = None  # mean_return / volatility
+        stats['sharpe_ratio'] = stats['mean_return'] / stats['volatility']  # mean_return / volatility
     else:
         stats['sharpe_ratio'] = 0
     
@@ -155,29 +162,30 @@ def analyze_portfolio(symbols):
         print(f"Analyzing {symbol}...")
         
         # TODO 4.2: Load the data
-        df = None  # load_price_data(symbol)
+        df = load_price_data(symbol)  # load_price_data(symbol)
         
         if df is None:
             continue
         
         # TODO 4.3: Calculate returns
-        df = None  # calculate_returns(df)
+        df = calculate_returns(df)  # calculate_returns(df)
         
         # TODO 4.4: Get statistics
-        stats = None  # calculate_statistics(df)
+        stats = calculate_statistics(df)  # calculate_statistics(df)
         
         # TODO 4.5: Add symbol name to stats dict
         stats['symbol'] = symbol
         
         # TODO 4.6: Add to results list
         # results.append(stats)
-    
+        results.append(stats)
+
     # TODO 4.7: Convert list of dicts to DataFrame
-    summary_df = None  # pd.DataFrame(results)
+    summary_df = pd.DataFrame(results)  # pd.DataFrame(results)
     
     # TODO 4.8: Sort by volatility (most volatile first)
     # Hint: summary_df.sort_values('volatility', ascending=False)
-    
+    summary_df = summary_df.sort_values('volatility', ascending=False)
     
     return summary_df
 
@@ -193,29 +201,27 @@ def find_extremes(summary_df):
     print("\n" + "="*60)
     print("ANALYSIS RESULTS")
     print("="*60)
-    
-    # TODO 5.1: Most volatile (highest risk)
-    # Hint: summary_df.nlargest(5, 'volatility')
+
+    most_volatile = summary_df.nlargest(5, 'volatility')
     print("\n📈 MOST VOLATILE (Highest Risk):")
-    print("TODO: Print top 5 most volatile")
+    print(f"Top 5 most {most_volatile}")
     
-    
-    # TODO 5.2: Least volatile (lowest risk)
-    # Hint: summary_df.nsmallest(5, 'volatility')
+    least_volatile = summary_df.nsmallest(5, 'volatility')
     print("\n📉 LEAST VOLATILE (Lowest Risk):")
-    print("TODO: Print top 5 least volatile")
+    print(f"Top 5 least {least_volatile}")
     
     
     # TODO 5.3: Best risk-adjusted returns (highest Sharpe ratio)
-    print("\n⭐ BEST RISK-ADJUSTED RETURNS:")
-    print("TODO: Print top 5 by Sharpe ratio")
+    sharpe_ratio_top_five = summary_df.nlargest(5, 'sharpe_ratio')
+    print(f"\n⭐ BEST RISK-ADJUSTED RETURNS:")
+    print(f"Top 5 by Sharpe ratio: {sharpe_ratio_top_five}")
     
     
     # TODO 5.4: Overall statistics
-    print("\n📊 OVERALL STATISTICS:")
-    print(f"Average volatility: TODO")
-    print(f"Average return: TODO")
-    print(f"Most common return: TODO (hint: use median)")
+    print("\n📊 OVERALL STATISTICS: ")
+    print(f"Average volatility: {summary_df['volatility'].mean():,.6f}")
+    print(f"Average return: {summary_df['mean_return'].mean():,.6f}")
+    print(f"Most common return: {summary_df['mean_return'].median():,.6f}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -226,14 +232,11 @@ def save_analysis(summary_df, filename='crypto_analysis_summary.csv'):
     """
     Save the analysis results to CSV
     """
-    # TODO 6.1: Create results folder if it doesn't exist
+    
     results_dir = Path(__file__).parent.parent.parent / 'results' / 'tables'
-    # os.makedirs(results_dir, exist_ok=True)
-    
-    # TODO 6.2: Save to CSV
-    filepath = None  # results_dir / filename
-    # summary_df.to_csv(filepath, index=False)
-    
+    os.makedirs(results_dir, exist_ok=True)
+    filepath = results_dir / filename  
+    summary_df.to_csv(filepath, index = False)
     print(f"\n✅ Analysis saved to {filepath}")
 
 
@@ -243,29 +246,29 @@ def save_analysis(summary_df, filename='crypto_analysis_summary.csv'):
 
 if __name__ == "__main__":
     # Your 52 symbols from Day 2
-    symbols = [
-        'BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'ADAUSDT', 'DOGEUSDT',
-        'XRPUSDT', 'AVAXUSDT', 'LINKUSDT', 'DOTUSDT', 'UNIUSDT',
-        'LTCUSDT', 'BCHUSDT', 'ATOMUSDT', 'ALGOUSDT', 'VETUSDT'
-        # Add more if you want, or use all 52
-    ]
     
     print("Starting portfolio analysis...")
     
     # TODO: Run the analysis
     # summary = analyze_portfolio(symbols)
+    summary = analyze_portfolio(all_symbols)
     
     # TODO: Print the full summary
     # print("\n" + "="*60)
     # print("FULL SUMMARY")
     # print("="*60)
     # print(summary)
+    print("\n" + "="*60)
+    print("FULL_SUMMARY")
+    print("="*60)
+    print(summary)
     
     # TODO: Find extremes
     # find_extremes(summary)
-    
+    find_extremes(summary)
     # TODO: Save results
     # save_analysis(summary)
+    save_analysis(summary)
     
     print("\n✅ Day 3 Complete!")
 

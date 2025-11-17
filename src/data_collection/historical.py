@@ -156,14 +156,13 @@ def save_to_csv(df, filename):
     print(f"Data saved to {filepath}")
 
 
+symbols = ['AAVEUSDT', 'ALGOUSDT', 'AVAXUSDT', 'BTCUSDT', 'BCHUSDT', 'BNBUSDT', 'BONKUSDT', 'ADAUSDT', 'LINKUSDT', 'ATOMUSDT', 'CRVUSDT', 'DGBUSDT', 'DOGEUSDT', 'ETHUSDT', 'ETCUSDT', 'ENSUSDT', 'FETUSDT', 'FLOKIUSDT', 'GALAUSDT', 'ONEUSDT', 'HBARUSDT', 'HYPEUSDT', 'ICPUSDT', 'IOTAUSDT', 'JUPUSDT', 'LTCUSDT', 'LPTUSDT', 'MEUSDT', 'NEARUSDT', 'TRUMPUSDT', 'OPUSDT', 'PEPEUSDT', 'DOTUSDT', 'POLUSDT', 'RVNUSDT', 'RENDERUSDT', 'SHIBUSDT', 'SOLUSDT', 'SUSDT', 'USDCUSDT', 'XLMUSDT', 'SUIUSDT', 'SUSHIUSDT', 'GRTUSDT', 'SANDUSDT', 'THETAUSDT', 'UNIUSDT', 'USDUSDT', 'VETUSDT', 'VTHOUSDT', 'XRPUSDT', 'ZILUSDT']
+
 # ═══════════════════════════════════════════════════════════════
 # STEP 5: Test Everything
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-   
-
-    symbols = ['AAVEUSDT', 'ALGOUSDT', 'AVAXUSDT', 'BTCUSDT', 'BCHUSDT', 'BNBUSDT', 'BONKUSDT', 'ADAUSDT', 'LINKUSDT', 'ATOMUSDT', 'CRVUSDT', 'DGBUSDT', 'DOGEUSDT', 'ETHUSDT', 'ETCUSDT', 'ENSUSDT', 'FETUSDT', 'FLOKIUSDT', 'GALAUSDT', 'ONEUSDT', 'HBARUSDT', 'HYPEUSDT', 'ICPUSDT', 'IOTAUSDT', 'JUPUSDT', 'LTCUSDT', 'LPTUSDT', 'MEUSDT', 'NEARUSDT', 'TRUMPUSDT', 'OPUSDT', 'PEPEUSDT', 'DOTUSDT', 'POLUSDT', 'RVNUSDT', 'RENDERUSDT', 'SHIBUSDT', 'SOLUSDT', 'SUSDT', 'USDCUSDT', 'XLMUSDT', 'SUIUSDT', 'SUSHIUSDT', 'GRTUSDT', 'SANDUSDT', 'THETAUSDT', 'UNIUSDT', 'USDUSDT', 'VETUSDT', 'VTHOUSDT', 'XRPUSDT', 'ZILUSDT']
 
     for sym in symbols:
         print(f"\nFetching {sym} historical data...")
