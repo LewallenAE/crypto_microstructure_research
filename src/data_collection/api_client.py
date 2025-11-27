@@ -1,6 +1,22 @@
 """
 API Client for Binance Cryptocurrency Data
 Provides functions to fetch real-time price data and order book data from Binance API
+
+This module provides a simple interface to the Binance.US REST API for fetching real-time and historical cryptocurrency price data.
+
+Key Functions:
+    get_crypto_price(symbol): Fetch current price for a trading pair
+
+Dependencies:
+    - requests: HTTP client
+
+API documentation:
+    https://docs.binance.us/
+
+Author: Anthony Eugene Lewallen
+
+Date: November 2025
+Version: 1.0
 """
 
 
@@ -33,10 +49,28 @@ def get_crypto_price(symbol):
     """    
     Fetches the current price of a cryptocurrency from Binance
     Parameters:
+    -----------
         symbol (str): The trading pair symbol (e.g., "BTCUSDT", "ETHUSDT")
 
     Returns: 
-        float: The current price, or None if there was an error.    
+    --------
+        float: The current price, or None if there was an error.
+
+    Examples
+    --------
+    >>> price = get_crypto_price('BTCUSDT')
+    >>> print(f"BTC Price: ${price:,.2f}")
+    BTC Price: $95,234.56 
+
+    Notes
+    -----
+    - This function does not require authentication
+    - Rate limits apply (see Binance.US documentation)
+    - Returns None on any error (network, invalid symbol, etc.)
+    
+    See Also
+    --------
+    historical.py : For fetching historical OHLCV data   
     """
 
     url = f"https://api.binance.us/api/v3/ticker/price?symbol={symbol}"
