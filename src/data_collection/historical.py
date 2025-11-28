@@ -22,9 +22,11 @@ TIME: 1-2 hours
 ═══════════════════════════════════════════════════════════════
 """
 
+import os
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
+import time
 
 # ═══════════════════════════════════════════════════════════════
 # CONCEPT: Candlestick Data (OHLCV)
@@ -44,35 +46,83 @@ from datetime import datetime, timedelta
 # STEP 1: Fetch Historical Data
 # ═══════════════════════════════════════════════════════════════
 
-def get_historical_prices(symbol, interval='1h', limit=100):
+symbols = ['AAVEUSDT', 'ALGOUSDT', 'AVAXUSDT', 'BTCUSDT', 'BCHUSDT', 'BNBUSDT', 
+           'BONKUSDT', 'ADAUSDT', 'LINKUSDT', 'ATOMUSDT', 'CRVUSDT', 'DGBUSDT', 
+           'DOGEUSDT', 'ETHUSDT', 'ETCUSDT', 'ENSUSDT', 'FETUSDT', 'FLOKIUSDT', 
+           'GALAUSDT', 'ONEUSDT', 'HBARUSDT', 'HYPEUSDT', 'ICPUSDT', 'IOTAUSDT', 
+           'JUPUSDT', 'LTCUSDT', 'LPTUSDT', 'MEUSDT', 'NEARUSDT', 'TRUMPUSDT', 
+           'OPUSDT', 'PEPEUSDT', 'DOTUSDT', 'POLUSDT', 'RVNUSDT', 'RENDERUSDT', 
+           'SHIBUSDT', 'SOLUSDT', 'SUSDT', 'USDCUSDT', 'XLMUSDT', 'SUIUSDT', 
+           'SUSHIUSDT', 'GRTUSDT', 'SANDUSDT', 'THETAUSDT', 'UNIUSDT', 'USDUSDT', 
+           'VETUSDT', 'VTHOUSDT', 'XRPUSDT', 'ZILUSDT']
+
+
+
+def get_historical_prices_extended(symbol, interval='1h', total_hours=2000):
     """
-    Fetch historical candlestick data from Binance
+    Fetch extended historical data by making multiple API calls
+    
+    Binance limits us to 1000 candles per request, so we make 2 calls
+    to get 2000 hours of data.
     
     Parameters:
         symbol (str): Trading pair (e.g., 'BTCUSDT')
         interval (str): Time interval - '1m', '5m', '1h', '1d', etc.
-        limit (int): Number of candles to fetch (max 1000)
+        total_hours (int): Total hours to fetch (we'll do 2000)
     
     Returns:
-        list: List of candlesticks, each is [timestamp, open, high, low, close, volume, ...]
+        list: Combined list of candlesticks from multiple calls
     """
     
     # TODO 1.1: Construct the URL
     # Base URL: https://api.binance.us/api/v3/klines
     # Parameters: symbol, interval, limit
     # Example: https://api.binance.us/api/v3/klines?symbol=BTCUSDT&interval=1h&limit=100
+    all_data = []
+    hours_per_call = 1000
+    num_calls = (total_hours // hours_per_call) 
+
+    end_time = int(datetime.now().timestamp() * 1000)
+
+    print(f" Fetching {total_hours} hours in {num_calls} batches...")
     
-    url_01 = f"https://api.binance.us/api/v3/klines?symbol={symbol}&interval={interval}&limit={limit}"
-    
-    try:
-        
-        response_01 = requests.get(url_01)         
-        data = response_01.json()          
-        return data
-        
-    except Exception as e:
-        print(f"Error fetching historical data: {e}")
+    for batch in range(num_calls):
+
+        hours_back = hours_per_call * (batch + 1)
+        start_time = end_time - (hours_back * 3600 * 1000)
+
+        url_01 = (f"https://api.binance.us/api/v3/klines?symbol={symbol}&interval={interval}&startTime={start_time}&endTime={end_time}&limit=1000")
+
+        try:
+            print(f" Batch {batch + 1} / {num_calls}...", end=" ")
+            response_01 = requests.get(url_01)         
+            data = response_01.json()
+
+            if isinstance(data, list) and len(data) > 0:
+                all_data.extend(data)
+                print(f' Got {len(data)} candles')
+            else:
+                print(f'No data, {symbol} might be too new')
+                break
+            end_time = start_time
+            time.sleep(0.3)
+
+        except Exception as e:
+            print(f"x Error: {e}")
+            break
+
+    if len(all_data) == 0:
         return None
+    
+    
+        
+    unique_data = {candle[0]: candle for candle in all_data}
+
+    sorted_data = sorted(unique_data.values(), key=lambda x: x[0])
+
+    print(f" Total: {len(sorted_data)} unqiue candles collected")
+
+    return sorted_data
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -120,13 +170,13 @@ def parse_candlesticks(raw_data):
 # STEP 3: Combine into One Function
 # ═══════════════════════════════════════════════════════════════
 
-def fetch_and_parse(symbol, interval='1h', limit=100):
+def fetch_and_parse(symbol, interval='1h', total_hours = 2000):
     """
     Fetch historical data and return as clean DataFrame
     
     This combines get_historical_prices() and parse_candlesticks()
     """
-    raw_data = get_historical_prices(symbol, interval = interval, limit = limit)  
+    raw_data = get_historical_prices_extended(symbol, interval = interval, total_hours = total_hours)  
     
     if raw_data is None or len(raw_data) == 0 or not isinstance(raw_data, list):
         print(f"Skipping {symbol} - Binance returned invalid data")
@@ -156,7 +206,7 @@ def save_to_csv(df, filename):
     print(f"Data saved to {filepath}")
 
 
-symbols = ['AAVEUSDT', 'ALGOUSDT', 'AVAXUSDT', 'BTCUSDT', 'BCHUSDT', 'BNBUSDT', 'BONKUSDT', 'ADAUSDT', 'LINKUSDT', 'ATOMUSDT', 'CRVUSDT', 'DGBUSDT', 'DOGEUSDT', 'ETHUSDT', 'ETCUSDT', 'ENSUSDT', 'FETUSDT', 'FLOKIUSDT', 'GALAUSDT', 'ONEUSDT', 'HBARUSDT', 'HYPEUSDT', 'ICPUSDT', 'IOTAUSDT', 'JUPUSDT', 'LTCUSDT', 'LPTUSDT', 'MEUSDT', 'NEARUSDT', 'TRUMPUSDT', 'OPUSDT', 'PEPEUSDT', 'DOTUSDT', 'POLUSDT', 'RVNUSDT', 'RENDERUSDT', 'SHIBUSDT', 'SOLUSDT', 'SUSDT', 'USDCUSDT', 'XLMUSDT', 'SUIUSDT', 'SUSHIUSDT', 'GRTUSDT', 'SANDUSDT', 'THETAUSDT', 'UNIUSDT', 'USDUSDT', 'VETUSDT', 'VTHOUSDT', 'XRPUSDT', 'ZILUSDT']
+
 
 # ═══════════════════════════════════════════════════════════════
 # STEP 5: Test Everything
@@ -164,19 +214,43 @@ symbols = ['AAVEUSDT', 'ALGOUSDT', 'AVAXUSDT', 'BTCUSDT', 'BCHUSDT', 'BNBUSDT', 
 
 if __name__ == "__main__":
 
-    for sym in symbols:
-        print(f"\nFetching {sym} historical data...")
-        data = fetch_and_parse(sym, interval='1h', limit = 200)
+    print("=" * 70)
+    print("COLLECTION 2,000 HOURS of HISTORICAL DATA")
+    print("=" * 70)
+    print(f"\nThis will take about 5 - 10 minutes for {len(symbols)} symbols....")
+    print("2 API calls per symbol with 300ms delay") 
+
+    successful = 0
+    failed = 0
+
+
+    for i, sym in enumerate(symbols, 1):
+        print(f"\n[{i}/{len(symbols)}] {sym}")
+
+        data = fetch_and_parse(sym, interval='1h', total_hours = 2000)
     
         if data is not None:
-            print("\nFirst 5 candles:")
-            print(f"{data.head()}")
-            print("\nBasic Statistics:")
-            print(f"{data.describe()}")
-            filename = f"{sym.lower()}_1h_1week.csv"
+            #print("\nFirst 5 candles:")
+            #print(f"{data.head()}")
+            #print("\nBasic Statistics:")
+            #print(f"{data.describe()}")
+            filename = f"{sym.lower()}_1h_2000h.csv"
             save_to_csv(data,filename)
+            successful += 1
+        else:
+            failed += 1
 
-
+    print("\n" + "="*70)
+    print("COLLECTION COMPLETE!")
+    print("="*70)
+    print(f"✓ Successful: {successful} symbols")
+    print(f"✗ Failed: {failed} symbols (likely too new)")
+    print(f"\nData saved to: src/data_collection/raw/")
+    print("\nNext steps:")
+    print("  1. Run: python src/features/basic_analysis.py")
+    print("  2. Run: python src/features/visualization.py")
+    print("  3. Run: python src/features/correlation.py")
+    print("  4. Run: python src/features/cointegration.py")
 # ═══════════════════════════════════════════════════════════════
 # WHAT TO SUBMIT:
 # ═══════════════════════════════════════════════════════════════

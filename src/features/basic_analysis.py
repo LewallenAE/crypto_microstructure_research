@@ -42,7 +42,7 @@ def load_price_data(symbol):
     
     current_dir = Path(__file__).resolve().parent.parent  # Path(__file__).parent
     raw_dir = current_dir/ "data_collection" / "raw"
-    filename = f"{symbol.lower()}_1h_1week.csv"
+    filename = f"{symbol.lower()}_1h_2000h.csv"
     filepath = raw_dir / filename   # current_dir / '../data_collection/raw' / f'{symbol.lower()}_1h_1week.csv'
     
     try:

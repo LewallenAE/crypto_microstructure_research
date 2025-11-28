@@ -98,7 +98,7 @@ def calculate_hedge_ratio(prices_a, prices_b):
     
     # TODO 1.4: Extract beta (the coefficient/slope)
     # model.params[0] gives you the beta coefficient
-    beta = model.params[0]
+    beta = model.params.iloc[0]
     
     return beta
 
@@ -252,7 +252,7 @@ def calculate_half_life(spread):
     model = OLS(df.iloc[:, 0], df.iloc[:, 1]).fit() # YOUR CODE HERE
     
     # TODO 4.5: Extract beta coefficient
-    beta = model.params[0] # YOUR CODE HERE
+    beta = model.params.iloc[0] # YOUR CODE HERE
     
     # TODO 4.6: Calculate half-life using the formula
     # If beta >= 0, spread is NOT mean-reverting (return infinity)
