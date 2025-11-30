@@ -88,10 +88,40 @@ def test_parameter_sensitivity(symbol_a, symbol_b, windows=[500, 1000, 1500, 200
     """
     # TODO: YOUR CODE HERE
     # Load full data
+    df_a = load_price_data(symbol_a)
+    df_b = load_price_data(symbol_b)
+
+    if df_a is None or df_b is None:
+        return None
+    
+    prices_a = df_a['close']
+    prices_b = df_b['close']
+
+    results = []
+
+    for window in windows:
+        print(f"Testing window size: {window} hours")
+        
+        prices_a_window = prices_a.tail(window)
+        prices_b_window = prices_b.tail(window)
+
+        hedge_ratio = calculate_hedge_ratio(prices_a_window, prices_b_window)
+        spread = calculate_spread(prices_a_window, prices_b_window, hedge_ratio)
+        adf_results = adf_test(spread)
+        half_life = calculate_half_life(spread)
+
+
+        results.append({
+            'window': window,
+            'p_value': adf_results['p_value'],
+            'half_life': half_life,
+            'is_cointegrated': adf_results['is_stationary'] and half_life < 100
+        })
+
     # Loop through windows
     # For each window: calculate stats
     # Return DataFrame with results
-    pass
+    return pd.DataFrame(results)
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -155,9 +185,46 @@ def rolling_cointegration_test(symbol_a, symbol_b, window_size=500, step_size=10
     # Loop through windows (start from 0, step by step_size)
     # For each window: calculate cointegration stats
     # Return DataFrame with time series of results
-    pass
+    df_a = load_price_data(symbol_a)
+    df_b = load_price_data(symbol_b)
 
+    if df_a is None or df_b is None:
+        return None
+    
+    prices_a = df_a['close']
+    prices_b = df_b['close']
 
+    total_length = len(prices_a)
+    results = []
+
+    start = 0
+
+    while start + window_size <= total_length:
+
+        prices_a_window = prices_a.iloc[start : start + window_size]
+        prices_b_window = prices_b.iloc[start : start + window_size]
+
+        window_start = df_a.index[start]
+        window_end = df_a.index[start + window_size - 1]
+
+        print(f"Testing window: {window_start} to {window_end}")
+
+        hedge_ratio = calculate_hedge_ratio(prices_a_window, prices_b_window)
+        spread = calculate_spread(prices_a_window, prices_b_window, hedge_ratio)
+        adf_results = adf_test(spread)
+        half_life = calculate_half_life(spread)
+
+        results.append({
+            'window_start': window_start,
+            'window_end': window_end,
+            'p_value': adf_results['p_value'],
+            'half_life': half_life,
+            'is_cointegrated': adf_results['is_stationary'] and half_life < 100
+        })
+
+        start += step_size
+
+    return pd.DataFrame(results)
 # ═══════════════════════════════════════════════════════════════
 # CONCEPT 3: VISUALIZE PARAMETER SENSITIVITY
 # ═══════════════════════════════════════════════════════════════
@@ -189,7 +256,31 @@ def plot_parameter_sensitivity(results_df, pair_name, save_fig=True):
     # Bottom: Plot half_life vs window
     # Add threshold lines (0.05 for p-value, 100 for half-life)
     # Save figure
-    pass
+    fig, axes = plt.subplots(2, 1, figsize=(12,8))
+    axes[0].plot(results_df['window'], results_df['p_value'], marker='o', linewidth = 2)
+    axes[0].axhline(y=0.05, color='red', linestyle='--', label='Threshold')
+    axes[0].set_xlabel('Window Size (hours)')
+    axes[0].set_ylabel('P_value')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+    axes[1].plot(results_df['window'], results_df['half_life'], marker='s', linewidth=2)
+    axes[1].axhline(y=100, color='red', linestyle='--', label='Max tradeable')
+    axes[1].set_xlabel('Window Size (hours)')
+    axes[1].set_ylabel('Half-Life')
+    axes[1].legend()
+    fig.suptitle(f'Parameter Sensititivy: {pair_name}', fontsize=14, fontweight='bold')
+    plt.tight_layout()
+
+
+    if save_fig:
+        figures_dir = PROJECT_ROOT / 'results' / 'figures'
+        os.makedirs(figures_dir, exist_ok=True)
+        filepath = figures_dir / f'sensitivity_{pair_name}.png'
+        plt.savefig(filepath, dpi=300)
+
+        plt.show()
+        plt.close()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -222,7 +313,70 @@ def plot_rolling_cointegration(results_df, pair_name, save_fig=True):
     # Top: P-value over time with 0.05 threshold
     # Bottom: Half-life over time
     # Shade periods where cointegrated (p < 0.05)
-    pass
+    fig, axes = plt.subplots(2, 1, figsize=(14,8))
+    axes[0].plot(results_df['window_end'],
+                 results_df['p_value'],
+                 linewidth=2,
+                 color='purple',
+                 label='P_value')
+    
+    axes[0].axhline(y=0.05,
+                    color='red',
+                    linestyle='--',
+                    label='Threshold (0.05)')
+    
+    axes[0].set_ylabel('P_value', fontsize = 12)
+    axes[0].set_title('P_value Over Time', fontweight='bold')
+    axes[0].legend()
+    axes[0].grid(True, alpha=0.3)
+
+
+    axes[1].plot(results_df['window_end'],
+                 results_df['half_life'],
+                 linewidth=2,
+                 color='orange',
+                 label='Half-Life')
+    
+    axes[1].axhline(y=100,
+                    color='red',
+                    linestyle='--',
+                    label='Max tradeable (100h)')
+    
+    axes[1].set_xlabel('Date', fontsize=12)
+    axes[1].set_ylabel('Half-life (hours)', fontsize=12)
+    axes[1].set_title('Half-life over Time', fontweight='bold')
+    axes[1].legend()
+    axes[1].grid(True, alpha=0.3)
+
+    plt.xticks(rotation=45)
+
+    fig.suptitle(f'Rolling Cointegration {pair_name}', fontsize=14, fontweight='bold')
+
+    plt.tight_layout()
+
+    if save_fig:
+        figures_dir = PROJECT_ROOT / 'results' / 'figures'
+        os.makedirs(figures_dir, exist_ok=True)
+        filepath = figures_dir / f'rolling_{pair_name.lower().replace("-", "_")}.png'
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        print(f"Saved: {filepath}")
+
+    plt.show()
+    plt.close()
+
+    is_coint = results_df['p_value'] < 0.05
+    axes[0].fill_between(results_df['window_end'],
+                         0, 0.05,
+                         where=is_coint,
+                         alpha=0.3,
+                         color='green',
+                         label='Cointegrated')
+    
+    is_tradeable = results_df['half_life'] < 100
+    axes[1].fill_between(results_df['window_end'], 0, 100, 
+                         where=is_tradeable,
+                         alpha=0.3,
+                         color='green')
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -266,7 +420,29 @@ def calculate_pair_quality_score(p_value, half_life, p_value_std=None):
     # Design your scoring system
     # Consider: p-value, half-life, consistency
     # Return score 0-100
-    pass
+    score = 0
+
+    if p_value < 0.05:
+        p_score = (0.05 - p_value) / 0.05 * 40
+    else:
+        p_score = 0
+
+    if 10 <= half_life <= 50:
+        hl_score = 30
+    elif half_life < 10:
+        hl_score = 20
+    else:
+        hl_score = max(0, 30 - (half_life - 50) / 5)
+
+    if p_value_std is not None:
+        consistency_score = 30 * (1 - min(p_value_std, 1))
+    else:
+        consistency_score = 30
+
+    score = p_score + hl_score + consistency_score
+
+    return score
+
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -302,8 +478,39 @@ def rank_pairs_by_quality():
     # For each pair, run tests and calculate score
     # Sort by score
     # Return ranked DataFrame
-    pass
+    tables_dir = PROJECT_ROOT / 'results' / 'tables'
+    coint_pairs = pd.read_csv(tables_dir / 'cointegrated_pairs.csv')
 
+    ranked_pairs = []
+
+    for idx, row in coint_pairs.iterrows():
+        symbol_a = row['asset_a']
+        symbol_b = row['asset_b']
+
+        sensitivity_results = test_parameter_sensitivity(symbol_a, symbol_b)
+
+    avg_p_value = sensitivity_results['p_value'].mean()
+    p_value_std = sensitivity_results['p_value'].std()
+
+    avg_half_life = sensitivity_results['half_life'].mean()
+
+    quality = calculate_pair_quality_score(avg_p_value, avg_half_life, p_value_std)
+
+    ranked_pairs.append({
+        'asset_a': symbol_a,
+        'asset b': symbol_b,
+        'avg_p_value': avg_p_value,
+        'p_value_std': p_value_std,
+        'avg_half_life': avg_half_life,
+        'quality_score': quality
+
+    })
+
+    results_df = pd.DataFrame(ranked_pairs)
+    
+    results_df = results_df.sort_values('quality_score', ascending=False)
+
+    return results_df
 
 # ═══════════════════════════════════════════════════════════════
 # CONCEPT 7: OPTIMAL LOOKBACK WINDOW
@@ -337,7 +544,18 @@ def find_optimal_window(symbol_a, symbol_b, test_windows=[500, 750, 1000, 1500, 
     # Test each window
     # Calculate consistency/stability metric
     # Return window with best stability
-    pass
+    results = test_parameter_sensitivity(symbol_a, symbol_b, test_windows)
+    p_value_var = results['p_value'].var()
+    half_life_var = results['half_life'].var()
+    stability = 1 / (1 + p_value_var + half_life_var * 0.01)
+    best_window = results.loc[results['p_value'].idxmin(), 'window']
+    return {
+               'optimal_window': best_window,
+              'stability_score': stability,
+               'p_value_variance': p_value_var,
+               'half_life_variance': half_life_var,
+               'details': results
+           }
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -359,7 +577,41 @@ if __name__ == "__main__":
     
     # TODO: Test your functions
     # Example workflow:
-    
+    symbol_a = coint_pairs.iloc[0]['asset_a']
+    symbol_b = coint_pairs.iloc[0]['asset_b']
+    pair_name = f"{symbol_a.replace('USDT', '')} - {symbol_b.replace('USDT', '')}"
+
+    print(f"\nAnalyzing: {pair_name}")
+    print("=" * 60)
+
+    print("\n1. Testing parameter sensitivity...")
+    sensitivity_results = test_parameter_sensitivity(symbol_a, symbol_b)
+    print(sensitivity_results)
+
+    print("\n2. Plotting parameter sensitivity...")
+    plot_parameter_sensitivity(sensitivity_results, pair_name)
+
+    print("\n3. Testing roling cointegreation (this may take a minute)...")
+    rolling_results = rolling_cointegration_test(symbol_a, symbol_b, window_size = 500, step_size = 100)
+    print(f"Tested {len(rolling_results)} rolling windows")
+    print(rolling_results.head())
+
+    print("\n4. Plotting rolling cointegration...")
+    plot_rolling_cointegration(rolling_results, pair_name)
+
+    print("\n5. Calculating quality score...")
+    p_val = coint_pairs.iloc[0]['p_value']
+    hl = coint_pairs.iloc[0]['half_life']
+    quality = calculate_pair_quality_score(p_val, hl)
+    print(f"Quality Score: {quality:.1f}/100")
+
+
+    print("\n6. Finding optimal window...")
+    optimal = find_optimal_window(symbol_a, symbol_b)
+    print(f"Optimal window: {optimal['optimal_window']} hours")
+    print(f"Stability score: {optimal['stability_score']:.4f}")
+
+
     # 1. Test parameter sensitivity for your best pair
     # symbol_a = coint_pairs.iloc[0]['asset_a']
     # symbol_b = coint_pairs.iloc[0]['asset_b']
@@ -385,7 +637,7 @@ if __name__ == "__main__":
     # )
     # print(f"\nQuality Score: {quality_score:.1f}/100")
     
-    print("\n✅ Day 7 skeleton ready - implement the concepts!")
+   
 
 
 # ═══════════════════════════════════════════════════════════════
