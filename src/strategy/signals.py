@@ -84,15 +84,27 @@ def calculate_z_score(spread, window=None):
     # TODO: Calculate rolling (or expanding) mean
     # Hint: If window is None: rolling_mean = spread.expanding().mean()
     #       Otherwise: rolling_mean = spread.rolling(window=window).mean()
+
+    if window is None: 
+        rolling_mean = spread.expanding().mean()
+        rolling_std = spread.expanding().std()
+    else: 
+        rolling_mean = spread.rolling(window=window).mean()
+        rolling_std = spread.rolling(window=window).std()
+
+    reolling_std = rolling_std.replace(0, np.nan)
     
-    # TODO: Calculate rolling (or expanding) std
-    # Hint: Similar to mean, but use .std()
+ # Calculate z-score
+    z_score = (spread - rolling_mean) / rolling_std
     
-    # TODO: Calculate z-score
-    # Hint: z_score = (spread - rolling_mean) / rolling_std
+    # Cap extreme z-scores
+    z_score = z_score.clip(-10, 10)
     
-    # TODO: Return z-score
-    pass
+    # Replace inf/nan with 0
+    z_score = z_score.replace([np.inf, -np.inf], 0)
+    z_score = z_score.fillna(0)
+    
+    return z_score
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -136,28 +148,39 @@ def generate_signals(z_score, entry_threshold=2.0, exit_threshold=0.5):
     """
     # TODO: Initialize signals as Series of zeros (same index as z_score)
     # Hint: signals = pd.Series(0, index=z_score.index)
-    
+    signals = pd.Series(0, index=z_score.index)
     # TODO: Create position tracker (what position are we currently in?)
     # Hint: position = 0  # Start with no position
+    position = 0
     
     # TODO: Loop through z_score values
     # Hint: for i in range(len(z_score)):
     #           current_z = z_score.iloc[i]
-    
+    for i in range(len(z_score)):
+        current_z = z_score.iloc[i]
+
         # TODO: ENTRY LOGIC - If no position currently
         # Hint: if position == 0:
         #           if current_z > entry_threshold:
         #               position = -1  # Enter SHORT
         #           elif current_z < -entry_threshold:
         #               position = 1   # Enter LONG
-        
+        if position == 0:
+            if current_z > entry_threshold:
+                position = -1
+            elif current_z < -entry_threshold:
+                position = 1
         # TODO: EXIT LOGIC - If in a position
         # Hint: elif position != 0:
         #           if abs(current_z) < exit_threshold:
         #               position = 0  # Exit position
+        elif position != 0:
+            if abs(current_z) < exit_threshold:
+                position = 0
         
         # TODO: Store current position in signals
         # Hint: signals.iloc[i] = position
+        signals.iloc[i] = position
     
     # TODO: Return signals
     return signals
@@ -198,16 +221,24 @@ def calculate_strategy_returns(spread, signals):
     """
     # TODO: Calculate spread returns (percent change)
     # Hint: spread_returns = spread.pct_change()
-    
+    spread_returns = spread.pct_change()
     # TODO: Shift signals by 1 (use yesterday's position for today's return)
     # Hint: lagged_signals = signals.shift(1)
-    
+
+    spread_returns = spread_returns.clip(-0.10, 0.10)
+
+    # Replace inf/nan
+    spread_returns = spread_returns.replace([np.inf, -np.inf], 0)
+    spread_returns = spread_returns.fillna(0)
+
+
+    lagged_signals = signals.shift(1)
     # TODO: Calculate strategy returns
     # Hint: strategy_returns = lagged_signals * spread_returns
-    
+    strategy_returns = lagged_signals * spread_returns
     # TODO: Fill NaN with 0
     # Hint: strategy_returns = strategy_returns.fillna(0)
-    
+    strategy_returns = strategy_returns.fillna(0)
     # TODO: Return strategy returns
     return strategy_returns
 
@@ -237,10 +268,11 @@ def calculate_performance_metrics(returns, signals):
     """
     # TODO: Calculate total return
     # Hint: total_return = (1 + returns).prod() - 1
-    
+    total_return = (1 + returns).prod() - 1
     # TODO: Count number of trades (position changes)
     # Hint: trades = (signals.diff() != 0).sum()
-    
+    trades = (signals.diff() != 0).sum()
+    sharpe = returns.mean() / returns.std() * np.sqrt(8760)
     # TODO: Calculate Sharpe ratio (annualized)
     # Assuming hourly data, there are ~8760 hours/year
     # Hint: sharpe = returns.mean() / returns.std() * np.sqrt(8760)
@@ -250,7 +282,10 @@ def calculate_performance_metrics(returns, signals):
     #       running_max = cumulative.expanding().max()
     #       drawdown = (cumulative - running_max) / running_max
     #       max_dd = drawdown.min()
-    
+    cumulative = (1 + returns).cumprod()
+    running_max = cumulative.expanding().max()
+    drawdown = (cumulative - running_max) / running_max
+    max_dd = drawdown.min()
     # TODO: Return metrics as dictionary
     return {
         'total_return': total_return,
@@ -276,104 +311,180 @@ def plot_trading_signals(spread, z_score, signals, returns, pair_name, save_fig=
     """
     # TODO: Create 3-panel figure
     # Hint: fig, axes = plt.subplots(3, 1, figsize=(14, 12))
-    
+    fig, axes = plt.subplots(3, 1, figsize=(14, 12))
     # ============ PANEL 1: SPREAD WITH SIGNALS ============
-    # TODO: Plot spread
-    # Hint: axes[0].plot(spread.index, spread, linewidth=1, color='blue', alpha=0.7)
+    # Plot spread
+    axes[0].plot(spread.index, spread, linewidth=1, color='blue', alpha=0.7, label='Spread')
     
-    # TODO: Mark LONG entries (signal changes to +1)
-    # Hint: long_entries = signals[(signals == 1) & (signals.shift(1) != 1)]
-    #       axes[0].scatter(long_entries.index, spread[long_entries.index], 
-    #                       color='green', marker='^', s=100, label='Long Entry')
+    # Mark LONG entries (signal changes to +1)
+    long_entries = signals[(signals == 1) & (signals.shift(1) != 1)]
+    axes[0].scatter(long_entries.index, spread[long_entries.index], 
+                    color='green', marker='^', s=100, label='Long Entry', zorder=5)
     
-    # TODO: Mark SHORT entries (signal changes to -1)
-    # TODO: Mark EXITS (signal changes to 0)
+    # Mark SHORT entries (signal changes to -1)
+    short_entries = signals[(signals == -1) & (signals.shift(1) != -1)]
+    axes[0].scatter(short_entries.index, spread[short_entries.index],
+                    color='red', marker='v', s=100, label='Short Entry', zorder=5)
     
-    # TODO: Add labels, title, legend, grid
+    # Mark EXITS (signal changes to 0)
+    exits = signals[(signals == 0) & (signals.shift(1) != 0)]
+    axes[0].scatter(exits.index, spread[exits.index],
+                    color='black', marker='x', s=100, label='Exit', zorder=5)
+    
+    # Add labels, title, legend, grid
+    axes[0].set_ylabel('Spread', fontsize=11)
+    axes[0].set_title(f'{pair_name} - Trading Signals', fontsize=13, fontweight='bold')
+    axes[0].legend(loc='best', fontsize=9)
+    axes[0].grid(True, alpha=0.3)
     
     # ============ PANEL 2: Z-SCORE WITH THRESHOLDS ============
-    # TODO: Plot z-score
-    # TODO: Add horizontal lines at ±2 (entry) and ±0.5 (exit)
-    # TODO: Add labels, title, legend, grid
+    # Plot z-score
+    axes[1].plot(z_score.index, z_score, linewidth=1, color='purple', alpha=0.7, label='Z-Score')
+    
+    # Add horizontal lines at ±2 (entry) and ±0.5 (exit)
+    axes[1].axhline(y=2.0, color='red', linestyle='--', linewidth=1, alpha=0.7, label='Entry Threshold (+2.0)')
+    axes[1].axhline(y=-2.0, color='red', linestyle='--', linewidth=1, alpha=0.7, label='Entry Threshold (-2.0)')
+    axes[1].axhline(y=0.5, color='orange', linestyle='--', linewidth=1, alpha=0.5, label='Exit Threshold (+0.5)')
+    axes[1].axhline(y=-0.5, color='orange', linestyle='--', linewidth=1, alpha=0.5, label='Exit Threshold (-0.5)')
+    axes[1].axhline(y=0, color='black', linestyle='-', linewidth=0.5, alpha=0.3)
+    
+    # Add labels, title, legend, grid
+    axes[1].set_ylabel('Z-Score', fontsize=11)
+    axes[1].set_title('Z-Score with Entry/Exit Thresholds', fontsize=13, fontweight='bold')
+    axes[1].legend(loc='best', fontsize=8)
+    axes[1].grid(True, alpha=0.3)
     
     # ============ PANEL 3: CUMULATIVE RETURNS ============
-    # TODO: Calculate cumulative returns
-    # Hint: cumulative_returns = (1 + returns).cumprod()
-    # TODO: Plot cumulative returns
-    # TODO: Add labels, title, grid
+    # Calculate cumulative returns
+    cumulative_returns = (1 + returns).cumprod()
     
-    # TODO: Add overall title
-    # TODO: plt.tight_layout()
-    # TODO: Save and show
-    pass
+    # Plot cumulative returns
+    axes[2].plot(cumulative_returns.index, cumulative_returns, linewidth=2, color='darkgreen', label='Strategy Returns')
+    axes[2].axhline(y=1.0, color='black', linestyle='--', linewidth=1, alpha=0.5, label='Breakeven')
+    
+    # Add labels, title, grid
+    axes[2].set_xlabel('Date', fontsize=11)
+    axes[2].set_ylabel('Cumulative Return', fontsize=11)
+    axes[2].set_title('Strategy Performance', fontsize=13, fontweight='bold')
+    axes[2].legend(loc='best', fontsize=9)
+    axes[2].grid(True, alpha=0.3)
+    
+    # Add overall title
+    fig.suptitle(f'Pairs Trading Strategy - {pair_name}', fontsize=15, fontweight='bold', y=0.995)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save figure
+    if save_fig:
+        output_dir = PROJECT_ROOT / 'results' / 'figures'
+        output_dir.mkdir(parents=True, exist_ok=True)
+        filename = f'trading_signals_{pair_name}.png'
+        filepath = output_dir / filename
+        plt.savefig(filepath, dpi=300, bbox_inches='tight')
+        print(f"✅ Figure saved: {filepath}")
+    
+    # Show plot
+    plt.show()
+    
+    return fig, axes
 
 
 # ═══════════════════════════════════════════════════════════════
 # CONCEPT 6: COMPLETE BACKTEST
-# ═══════════════════════════════════════════════════════════════
-
+# ═══════════════════════════════════════════════════════════════"""
 def backtest_pair(symbol_a, symbol_b, window=1500, 
                   entry_threshold=2.0, exit_threshold=0.5):
     """
-    Complete backtest pipeline for a pair
     
-    Parameters:
-        symbol_a, symbol_b: Trading pair symbols
-        window: Lookback window for cointegration (use optimal from Week 1)
-        entry_threshold: Z-score for entry (default 2.0)
-        exit_threshold: Z-score for exit (default 0.5)
+    Original backtest_pair() caused issues with z_score by having small number division produce returns
+    with over 100,000% (completely not plausible). Fixed by adding data cleaning
     
-    Returns:
-        dict: Complete backtest results
     """
+
     print(f"\n{'='*60}")
     print(f"BACKTESTING: {symbol_a} - {symbol_b}")
     print(f"{'='*60}\n")
-    
-    # TODO 1: Load data
-    # Hint: df_a = load_price_data(symbol_a)
-    #       df_b = load_price_data(symbol_b)
-    
-    # TODO 2: Use last 'window' hours
-    # Hint: prices_a = df_a['close'].tail(window)
-    #       prices_b = df_b['close'].tail(window)
-    
-    # TODO 3: Calculate hedge ratio and spread
-    # Hint: hedge_ratio = calculate_hedge_ratio(prices_a, prices_b)
-    #       spread = calculate_spread(prices_a, prices_b, hedge_ratio)
-    
-    # TODO 4: Calculate z-score
-    # Hint: z_score = calculate_z_score(spread, window=60)
-    
-    # TODO 5: Generate signals
-    # Hint: signals = generate_signals(z_score, entry_threshold, exit_threshold)
-    
-    # TODO 6: Calculate returns
-    # Hint: returns = calculate_strategy_returns(spread, signals)
-    
-    # TODO 7: Calculate metrics
-    # Hint: metrics = calculate_performance_metrics(returns, signals)
-    
-    # TODO 8: Print results
+
+    df_a = load_price_data(symbol_a)
+    df_b = load_price_data(symbol_b)
+
+    prices_a = df_a['close'].tail(window)
+    prices_b = df_b['close'].tail(window)
+
+    print("Data Cleaning...")
+    valid_mask = (prices_a > 0) & (prices_b > 0) & (~prices_a.isna()) & (~prices_b.isna())
+    prices_a = prices_a[valid_mask]
+    prices_b = prices_b[valid_mask]
+    print(f" Valid data points: {len(prices_a)}/ {window}")
+
+    hedge_ratio = calculate_hedge_ratio(prices_a, prices_b)
+    spread = calculate_spread(prices_a, prices_b, hedge_ratio)
+
+    print("\nSpread statistics (before cleaning):")
+    print(f" Mean: {spread.mean():.6f}")
+    print(f" Std: {spread.std():.6f}")
+    print(f" Min: {spread.min():.6f}")
+    print(f" Max: {spread.max():.6f}")
+
+    spread_mean = spread.mean()
+    spread_std = spread.std()
+    spread_clean = spread.copy()
+    outlier_mask = np.abs(spread - spread_mean) > 5 * spread_std
+    print(f" Outliers Removed: {outlier_mask.sum()}")
+
+    spread_clean[outlier_mask] = np.nan
+    spread_clean = spread_clean.fillna(method='ffill').fillna(method='bfill')
+
+    print(f"\n Spread Statistics After Cleaning:")
+    print(f" Mean: {spread_clean.mean():.6f}")
+    print(f" Std: {spread_clean.std():.6f}")
+    print(f" Min: {spread_clean.min():.6f}")
+    print(f" Max: {spread_clean.max():.6f}")
+
+
+    z_score = calculate_z_score(spread_clean, window=60)
+
+    print("\nZ-score Statistics")
+    print(f" Mean: {z_score.mean():.2f}")
+    print(f" Std: {z_score.std():.2f}")
+    print(f" Min: {z_score.min():.2f}")
+    print(f" Max: {z_score.max():.2f}")
+
+    signals = generate_signals(z_score, entry_threshold, exit_threshold)
+
+    returns = calculate_strategy_returns(spread_clean, signals)
+
+
+    print("\n Return Statistics:")
+    print(f" Mean: {returns.mean():.6f}")
+    print(f" Std: {returns.std():.6f}")
+    print(f" Min: {returns.min():.6f}")
+    print(f" Max: {returns.max():.6f}")
+    print(f" Extreme returns (>10%): {(np.abs(returns) > 0.1).sum()}")
+
+    metrics = calculate_performance_metrics(returns, signals)
+
+    print("\n" + "="*60)
     print("PERFORMANCE METRICS:")
     print(f"Total Return: {metrics['total_return']*100:.2f}%")
     print(f"Number of Trades: {metrics['num_trades']}")
     print(f"Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
     print(f"Max Drawdown: {metrics['max_drawdown']*100:.2f}%")
-    
-    # TODO 9: Plot results
+    print("="*60)
+
+     # Plot results (use CLEANED spread)
     pair_name = f"{symbol_a.replace('USDT','')}-{symbol_b.replace('USDT','')}"
-    plot_trading_signals(spread, z_score, signals, returns, pair_name)
+    plot_trading_signals(spread_clean, z_score, signals, returns, pair_name)
     
-    # TODO 10: Return everything
+    # Return everything
     return {
-        'spread': spread,
+        'spread': spread_clean,
         'z_score': z_score,
         'signals': signals,
         'returns': returns,
         'metrics': metrics
     }
-
 
 # ═══════════════════════════════════════════════════════════════
 # MAIN EXECUTION
